@@ -1,0 +1,168 @@
+<html>
+<head>
+<title>bdist_dumb.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #517d46; font-style: italic;}
+.s1 { color: #a8afbe;}
+.s2 { color: #cc844f;}
+.s3 { color: #cc7832;}
+.s4 { color: #75aa5f;}
+.s5 { color: #ac6eb7; font-weight: bold;}
+.s6 { color: #8fb2ce;}
+.s7 { color: #808080;}
+</style>
+</head>
+<body bgcolor="#161c2d">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+bdist_dumb.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot;distutils.command.bdist_dumb 
+ 
+Implements the Distutils 'bdist_dumb' command (create a &quot;dumb&quot; built 
+distribution -- i.e., just an archive to be unpacked under $prefix or 
+$exec_prefix).&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">from </span><span class="s1">distutils.core </span><span class="s2">import </span><span class="s1">Command</span>
+<span class="s2">from </span><span class="s1">distutils.util </span><span class="s2">import </span><span class="s1">get_platform</span>
+<span class="s2">from </span><span class="s1">distutils.dir_util </span><span class="s2">import </span><span class="s1">remove_tree</span><span class="s3">, </span><span class="s1">ensure_relative</span>
+<span class="s2">from </span><span class="s1">distutils.errors </span><span class="s2">import </span><span class="s1">DistutilsPlatformError</span>
+<span class="s2">from </span><span class="s1">distutils.sysconfig </span><span class="s2">import </span><span class="s1">get_python_version</span>
+<span class="s2">from </span><span class="s1">distutils </span><span class="s2">import </span><span class="s1">log</span>
+
+
+<span class="s2">class </span><span class="s1">bdist_dumb(Command):</span>
+
+    <span class="s1">description = </span><span class="s4">&quot;create a </span><span class="s5">\&quot;</span><span class="s4">dumb</span><span class="s5">\&quot; </span><span class="s4">built distribution&quot;</span>
+
+    <span class="s1">user_options = [</span>
+        <span class="s1">(</span><span class="s4">'bdist-dir='</span><span class="s3">, </span><span class="s4">'d'</span><span class="s3">, </span><span class="s4">&quot;temporary directory for creating the distribution&quot;</span><span class="s1">)</span><span class="s3">,</span>
+        <span class="s1">(</span>
+            <span class="s4">'plat-name='</span><span class="s3">,</span>
+            <span class="s4">'p'</span><span class="s3">,</span>
+            <span class="s4">&quot;platform name to embed in generated filenames &quot;</span>
+            <span class="s4">&quot;(default: %s)&quot; </span><span class="s1">% get_platform()</span><span class="s3">,</span>
+        <span class="s1">)</span><span class="s3">,</span>
+        <span class="s1">(</span>
+            <span class="s4">'format='</span><span class="s3">,</span>
+            <span class="s4">'f'</span><span class="s3">,</span>
+            <span class="s4">&quot;archive format to create (tar, gztar, bztar, xztar, &quot; &quot;ztar, zip)&quot;</span><span class="s3">,</span>
+        <span class="s1">)</span><span class="s3">,</span>
+        <span class="s1">(</span>
+            <span class="s4">'keep-temp'</span><span class="s3">,</span>
+            <span class="s4">'k'</span><span class="s3">,</span>
+            <span class="s4">&quot;keep the pseudo-installation tree around after &quot;</span>
+            <span class="s1">+ </span><span class="s4">&quot;creating the distribution archive&quot;</span><span class="s3">,</span>
+        <span class="s1">)</span><span class="s3">,</span>
+        <span class="s1">(</span><span class="s4">'dist-dir='</span><span class="s3">, </span><span class="s4">'d'</span><span class="s3">, </span><span class="s4">&quot;directory to put final built distributions in&quot;</span><span class="s1">)</span><span class="s3">,</span>
+        <span class="s1">(</span><span class="s4">'skip-build'</span><span class="s3">, </span><span class="s2">None</span><span class="s3">, </span><span class="s4">&quot;skip rebuilding everything (for testing/debugging)&quot;</span><span class="s1">)</span><span class="s3">,</span>
+        <span class="s1">(</span>
+            <span class="s4">'relative'</span><span class="s3">,</span>
+            <span class="s2">None</span><span class="s3">,</span>
+            <span class="s4">&quot;build the archive using relative paths &quot; &quot;(default: false)&quot;</span><span class="s3">,</span>
+        <span class="s1">)</span><span class="s3">,</span>
+        <span class="s1">(</span>
+            <span class="s4">'owner='</span><span class="s3">,</span>
+            <span class="s4">'u'</span><span class="s3">,</span>
+            <span class="s4">&quot;Owner name used when creating a tar file&quot; &quot; [default: current user]&quot;</span><span class="s3">,</span>
+        <span class="s1">)</span><span class="s3">,</span>
+        <span class="s1">(</span>
+            <span class="s4">'group='</span><span class="s3">,</span>
+            <span class="s4">'g'</span><span class="s3">,</span>
+            <span class="s4">&quot;Group name used when creating a tar file&quot; &quot; [default: current group]&quot;</span><span class="s3">,</span>
+        <span class="s1">)</span><span class="s3">,</span>
+    <span class="s1">]</span>
+
+    <span class="s1">boolean_options = [</span><span class="s4">'keep-temp'</span><span class="s3">, </span><span class="s4">'skip-build'</span><span class="s3">, </span><span class="s4">'relative'</span><span class="s1">]</span>
+
+    <span class="s1">default_format = {</span><span class="s4">'posix'</span><span class="s1">: </span><span class="s4">'gztar'</span><span class="s3">, </span><span class="s4">'nt'</span><span class="s1">: </span><span class="s4">'zip'</span><span class="s1">}</span>
+
+    <span class="s2">def </span><span class="s1">initialize_options(self):</span>
+        <span class="s1">self.bdist_dir = </span><span class="s2">None</span>
+        <span class="s1">self.plat_name = </span><span class="s2">None</span>
+        <span class="s1">self.format = </span><span class="s2">None</span>
+        <span class="s1">self.keep_temp = </span><span class="s6">0</span>
+        <span class="s1">self.dist_dir = </span><span class="s2">None</span>
+        <span class="s1">self.skip_build = </span><span class="s2">None</span>
+        <span class="s1">self.relative = </span><span class="s6">0</span>
+        <span class="s1">self.owner = </span><span class="s2">None</span>
+        <span class="s1">self.group = </span><span class="s2">None</span>
+
+    <span class="s2">def </span><span class="s1">finalize_options(self):</span>
+        <span class="s2">if </span><span class="s1">self.bdist_dir </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">bdist_base = self.get_finalized_command(</span><span class="s4">'bdist'</span><span class="s1">).bdist_base</span>
+            <span class="s1">self.bdist_dir = os.path.join(bdist_base</span><span class="s3">, </span><span class="s4">'dumb'</span><span class="s1">)</span>
+
+        <span class="s2">if </span><span class="s1">self.format </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">self.format = self.default_format[os.name]</span>
+            <span class="s2">except </span><span class="s1">KeyError:</span>
+                <span class="s2">raise </span><span class="s1">DistutilsPlatformError(</span>
+                    <span class="s4">&quot;don't know how to create dumb built distributions &quot;</span>
+                    <span class="s4">&quot;on platform %s&quot; </span><span class="s1">% os.name</span>
+                <span class="s1">)</span>
+
+        <span class="s1">self.set_undefined_options(</span>
+            <span class="s4">'bdist'</span><span class="s3">,</span>
+            <span class="s1">(</span><span class="s4">'dist_dir'</span><span class="s3">, </span><span class="s4">'dist_dir'</span><span class="s1">)</span><span class="s3">,</span>
+            <span class="s1">(</span><span class="s4">'plat_name'</span><span class="s3">, </span><span class="s4">'plat_name'</span><span class="s1">)</span><span class="s3">,</span>
+            <span class="s1">(</span><span class="s4">'skip_build'</span><span class="s3">, </span><span class="s4">'skip_build'</span><span class="s1">)</span><span class="s3">,</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">run(self):</span>
+        <span class="s2">if not </span><span class="s1">self.skip_build:</span>
+            <span class="s1">self.run_command(</span><span class="s4">'build'</span><span class="s1">)</span>
+
+        <span class="s1">install = self.reinitialize_command(</span><span class="s4">'install'</span><span class="s3">, </span><span class="s1">reinit_subcommands=</span><span class="s6">1</span><span class="s1">)</span>
+        <span class="s1">install.root = self.bdist_dir</span>
+        <span class="s1">install.skip_build = self.skip_build</span>
+        <span class="s1">install.warn_dir = </span><span class="s6">0</span>
+
+        <span class="s1">log.info(</span><span class="s4">&quot;installing to %s&quot;</span><span class="s3">, </span><span class="s1">self.bdist_dir)</span>
+        <span class="s1">self.run_command(</span><span class="s4">'install'</span><span class="s1">)</span>
+
+        <span class="s7"># And make an archive relative to the root of the</span>
+        <span class="s7"># pseudo-installation tree.</span>
+        <span class="s1">archive_basename = </span><span class="s4">&quot;{}.{}&quot;</span><span class="s1">.format(</span>
+            <span class="s1">self.distribution.get_fullname()</span><span class="s3">, </span><span class="s1">self.plat_name</span>
+        <span class="s1">)</span>
+
+        <span class="s1">pseudoinstall_root = os.path.join(self.dist_dir</span><span class="s3">, </span><span class="s1">archive_basename)</span>
+        <span class="s2">if not </span><span class="s1">self.relative:</span>
+            <span class="s1">archive_root = self.bdist_dir</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">self.distribution.has_ext_modules() </span><span class="s2">and </span><span class="s1">(</span>
+                <span class="s1">install.install_base != install.install_platbase</span>
+            <span class="s1">):</span>
+                <span class="s2">raise </span><span class="s1">DistutilsPlatformError(</span>
+                    <span class="s4">&quot;can't make a dumb built distribution where &quot;</span>
+                    <span class="s4">&quot;base and platbase are different (%s, %s)&quot;</span>
+                    <span class="s1">% (repr(install.install_base)</span><span class="s3">, </span><span class="s1">repr(install.install_platbase))</span>
+                <span class="s1">)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">archive_root = os.path.join(</span>
+                    <span class="s1">self.bdist_dir</span><span class="s3">, </span><span class="s1">ensure_relative(install.install_base)</span>
+                <span class="s1">)</span>
+
+        <span class="s7"># Make the archive</span>
+        <span class="s1">filename = self.make_archive(</span>
+            <span class="s1">pseudoinstall_root</span><span class="s3">,</span>
+            <span class="s1">self.format</span><span class="s3">,</span>
+            <span class="s1">root_dir=archive_root</span><span class="s3">,</span>
+            <span class="s1">owner=self.owner</span><span class="s3">,</span>
+            <span class="s1">group=self.group</span><span class="s3">,</span>
+        <span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">self.distribution.has_ext_modules():</span>
+            <span class="s1">pyversion = get_python_version()</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">pyversion = </span><span class="s4">'any'</span>
+        <span class="s1">self.distribution.dist_files.append((</span><span class="s4">'bdist_dumb'</span><span class="s3">, </span><span class="s1">pyversion</span><span class="s3">, </span><span class="s1">filename))</span>
+
+        <span class="s2">if not </span><span class="s1">self.keep_temp:</span>
+            <span class="s1">remove_tree(self.bdist_dir</span><span class="s3">, </span><span class="s1">dry_run=self.dry_run)</span>
+</pre>
+</body>
+</html>

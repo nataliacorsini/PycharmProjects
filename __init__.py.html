@@ -1,0 +1,928 @@
+<html>
+<head>
+<title>__init__.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cc844f;}
+.s1 { color: #a8afbe;}
+.s2 { color: #cc7832;}
+.s3 { color: #75aa5f;}
+.s4 { color: #517d46; font-style: italic;}
+.s5 { color: #ac6eb7; font-weight: bold;}
+.s6 { color: #808080;}
+.s7 { color: #8fb2ce;}
+</style>
+</head>
+<body bgcolor="#161c2d">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+__init__.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">os</span>
+<span class="s0">import </span><span class="s1">re</span>
+<span class="s0">import </span><span class="s1">abc</span>
+<span class="s0">import </span><span class="s1">csv</span>
+<span class="s0">import </span><span class="s1">sys</span>
+<span class="s0">import </span><span class="s1">zipp</span>
+<span class="s0">import </span><span class="s1">email</span>
+<span class="s0">import </span><span class="s1">pathlib</span>
+<span class="s0">import </span><span class="s1">operator</span>
+<span class="s0">import </span><span class="s1">textwrap</span>
+<span class="s0">import </span><span class="s1">warnings</span>
+<span class="s0">import </span><span class="s1">functools</span>
+<span class="s0">import </span><span class="s1">itertools</span>
+<span class="s0">import </span><span class="s1">posixpath</span>
+<span class="s0">import </span><span class="s1">collections</span>
+
+<span class="s0">from </span><span class="s1">. </span><span class="s0">import </span><span class="s1">_adapters</span><span class="s2">, </span><span class="s1">_meta</span><span class="s2">, </span><span class="s1">_py39compat</span>
+<span class="s0">from </span><span class="s1">._collections </span><span class="s0">import </span><span class="s1">FreezableDefaultDict</span><span class="s2">, </span><span class="s1">Pair</span>
+<span class="s0">from </span><span class="s1">._compat </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">NullFinder</span><span class="s2">,</span>
+    <span class="s1">install</span><span class="s2">,</span>
+    <span class="s1">pypy_partial</span><span class="s2">,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">._functools </span><span class="s0">import </span><span class="s1">method_cache</span><span class="s2">, </span><span class="s1">pass_none</span>
+<span class="s0">from </span><span class="s1">._itertools </span><span class="s0">import </span><span class="s1">always_iterable</span><span class="s2">, </span><span class="s1">unique_everseen</span>
+<span class="s0">from </span><span class="s1">._meta </span><span class="s0">import </span><span class="s1">PackageMetadata</span><span class="s2">, </span><span class="s1">SimplePath</span>
+
+<span class="s0">from </span><span class="s1">contextlib </span><span class="s0">import </span><span class="s1">suppress</span>
+<span class="s0">from </span><span class="s1">importlib </span><span class="s0">import </span><span class="s1">import_module</span>
+<span class="s0">from </span><span class="s1">importlib.abc </span><span class="s0">import </span><span class="s1">MetaPathFinder</span>
+<span class="s0">from </span><span class="s1">itertools </span><span class="s0">import </span><span class="s1">starmap</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">List</span><span class="s2">, </span><span class="s1">Mapping</span><span class="s2">, </span><span class="s1">Optional</span>
+
+
+<span class="s1">__all__ = [</span>
+    <span class="s3">'Distribution'</span><span class="s2">,</span>
+    <span class="s3">'DistributionFinder'</span><span class="s2">,</span>
+    <span class="s3">'PackageMetadata'</span><span class="s2">,</span>
+    <span class="s3">'PackageNotFoundError'</span><span class="s2">,</span>
+    <span class="s3">'distribution'</span><span class="s2">,</span>
+    <span class="s3">'distributions'</span><span class="s2">,</span>
+    <span class="s3">'entry_points'</span><span class="s2">,</span>
+    <span class="s3">'files'</span><span class="s2">,</span>
+    <span class="s3">'metadata'</span><span class="s2">,</span>
+    <span class="s3">'packages_distributions'</span><span class="s2">,</span>
+    <span class="s3">'requires'</span><span class="s2">,</span>
+    <span class="s3">'version'</span><span class="s2">,</span>
+<span class="s1">]</span>
+
+
+<span class="s0">class </span><span class="s1">PackageNotFoundError(ModuleNotFoundError):</span>
+    <span class="s4">&quot;&quot;&quot;The package was not found.&quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__str__(self):</span>
+        <span class="s0">return </span><span class="s3">f&quot;No package metadata was found for </span><span class="s5">{</span><span class="s1">self.name</span><span class="s5">}</span><span class="s3">&quot;</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">name(self):</span>
+        <span class="s1">(name</span><span class="s2">,</span><span class="s1">) = self.args</span>
+        <span class="s0">return </span><span class="s1">name</span>
+
+
+<span class="s0">class </span><span class="s1">Sectioned:</span>
+    <span class="s4">&quot;&quot;&quot; 
+    A simple entry point config parser for performance 
+ 
+    &gt;&gt;&gt; for item in Sectioned.read(Sectioned._sample): 
+    ...     print(item) 
+    Pair(name='sec1', value='# comments ignored') 
+    Pair(name='sec1', value='a = 1') 
+    Pair(name='sec1', value='b = 2') 
+    Pair(name='sec2', value='a = 2') 
+ 
+    &gt;&gt;&gt; res = Sectioned.section_pairs(Sectioned._sample) 
+    &gt;&gt;&gt; item = next(res) 
+    &gt;&gt;&gt; item.name 
+    'sec1' 
+    &gt;&gt;&gt; item.value 
+    Pair(name='a', value='1') 
+    &gt;&gt;&gt; item = next(res) 
+    &gt;&gt;&gt; item.value 
+    Pair(name='b', value='2') 
+    &gt;&gt;&gt; item = next(res) 
+    &gt;&gt;&gt; item.name 
+    'sec2' 
+    &gt;&gt;&gt; item.value 
+    Pair(name='a', value='2') 
+    &gt;&gt;&gt; list(res) 
+    [] 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">_sample = textwrap.dedent(</span>
+        <span class="s3">&quot;&quot;&quot; 
+        [sec1] 
+        # comments ignored 
+        a = 1 
+        b = 2 
+ 
+        [sec2] 
+        a = 2 
+        &quot;&quot;&quot;</span>
+    <span class="s1">).lstrip()</span>
+
+    <span class="s1">@classmethod</span>
+    <span class="s0">def </span><span class="s1">section_pairs(cls</span><span class="s2">, </span><span class="s1">text):</span>
+        <span class="s0">return </span><span class="s1">(</span>
+            <span class="s1">section._replace(value=Pair.parse(section.value))</span>
+            <span class="s0">for </span><span class="s1">section </span><span class="s0">in </span><span class="s1">cls.read(text</span><span class="s2">, </span><span class="s1">filter_=cls.valid)</span>
+            <span class="s0">if </span><span class="s1">section.name </span><span class="s0">is not None</span>
+        <span class="s1">)</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s0">def </span><span class="s1">read(text</span><span class="s2">, </span><span class="s1">filter_=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s1">lines = filter(filter_</span><span class="s2">, </span><span class="s1">map(str.strip</span><span class="s2">, </span><span class="s1">text.splitlines()))</span>
+        <span class="s1">name = </span><span class="s0">None</span>
+        <span class="s0">for </span><span class="s1">value </span><span class="s0">in </span><span class="s1">lines:</span>
+            <span class="s1">section_match = value.startswith(</span><span class="s3">'['</span><span class="s1">) </span><span class="s0">and </span><span class="s1">value.endswith(</span><span class="s3">']'</span><span class="s1">)</span>
+            <span class="s0">if </span><span class="s1">section_match:</span>
+                <span class="s1">name = value.strip(</span><span class="s3">'[]'</span><span class="s1">)</span>
+                <span class="s0">continue</span>
+            <span class="s0">yield </span><span class="s1">Pair(name</span><span class="s2">, </span><span class="s1">value)</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s0">def </span><span class="s1">valid(line):</span>
+        <span class="s0">return </span><span class="s1">line </span><span class="s0">and not </span><span class="s1">line.startswith(</span><span class="s3">'#'</span><span class="s1">)</span>
+
+
+<span class="s0">class </span><span class="s1">DeprecatedTuple:</span>
+    <span class="s4">&quot;&quot;&quot; 
+    Provide subscript item access for backward compatibility. 
+ 
+    &gt;&gt;&gt; recwarn = getfixture('recwarn') 
+    &gt;&gt;&gt; ep = EntryPoint(name='name', value='value', group='group') 
+    &gt;&gt;&gt; ep[:] 
+    ('name', 'value', 'group') 
+    &gt;&gt;&gt; ep[0] 
+    'name' 
+    &gt;&gt;&gt; len(recwarn) 
+    1 
+    &quot;&quot;&quot;</span>
+
+    <span class="s6"># Do not remove prior to 2023-05-01 or Python 3.13</span>
+    <span class="s1">_warn = functools.partial(</span>
+        <span class="s1">warnings.warn</span><span class="s2">,</span>
+        <span class="s3">&quot;EntryPoint tuple interface is deprecated. Access members by name.&quot;</span><span class="s2">,</span>
+        <span class="s1">DeprecationWarning</span><span class="s2">,</span>
+        <span class="s1">stacklevel=pypy_partial(</span><span class="s7">2</span><span class="s1">)</span><span class="s2">,</span>
+    <span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__getitem__(self</span><span class="s2">, </span><span class="s1">item):</span>
+        <span class="s1">self._warn()</span>
+        <span class="s0">return </span><span class="s1">self._key()[item]</span>
+
+
+<span class="s0">class </span><span class="s1">EntryPoint(DeprecatedTuple):</span>
+    <span class="s4">&quot;&quot;&quot;An entry point as defined by Python packaging conventions. 
+ 
+    See `the packaging docs on entry points 
+    &lt;https://packaging.python.org/specifications/entry-points/&gt;`_ 
+    for more information. 
+ 
+    &gt;&gt;&gt; ep = EntryPoint( 
+    ...     name=None, group=None, value='package.module:attr [extra1, extra2]') 
+    &gt;&gt;&gt; ep.module 
+    'package.module' 
+    &gt;&gt;&gt; ep.attr 
+    'attr' 
+    &gt;&gt;&gt; ep.extras 
+    ['extra1', 'extra2'] 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">pattern = re.compile(</span>
+        <span class="s3">r'(?P&lt;module&gt;[\w.]+)\s*'</span>
+        <span class="s3">r'(:\s*(?P&lt;attr&gt;[\w.]+)\s*)?'</span>
+        <span class="s3">r'((?P&lt;extras&gt;\[.*\])\s*)?$'</span>
+    <span class="s1">)</span>
+    <span class="s3">&quot;&quot;&quot; 
+    A regular expression describing the syntax for an entry point, 
+    which might look like: 
+ 
+        - module 
+        - package.module 
+        - package.module:attribute 
+        - package.module:object.attribute 
+        - package.module:attr [extra1, extra2] 
+ 
+    Other combinations are possible as well. 
+ 
+    The expression is lenient about whitespace around the ':', 
+    following the attr, and following any extras. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">name: str</span>
+    <span class="s1">value: str</span>
+    <span class="s1">group: str</span>
+
+    <span class="s1">dist: Optional[</span><span class="s3">'Distribution'</span><span class="s1">] = </span><span class="s0">None</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self</span><span class="s2">, </span><span class="s1">name</span><span class="s2">, </span><span class="s1">value</span><span class="s2">, </span><span class="s1">group):</span>
+        <span class="s1">vars(self).update(name=name</span><span class="s2">, </span><span class="s1">value=value</span><span class="s2">, </span><span class="s1">group=group)</span>
+
+    <span class="s0">def </span><span class="s1">load(self):</span>
+        <span class="s4">&quot;&quot;&quot;Load the entry point from its definition. If only a module 
+        is indicated by the value, return that module. Otherwise, 
+        return the named object. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">match = self.pattern.match(self.value)</span>
+        <span class="s1">module = import_module(match.group(</span><span class="s3">'module'</span><span class="s1">))</span>
+        <span class="s1">attrs = filter(</span><span class="s0">None</span><span class="s2">, </span><span class="s1">(match.group(</span><span class="s3">'attr'</span><span class="s1">) </span><span class="s0">or </span><span class="s3">''</span><span class="s1">).split(</span><span class="s3">'.'</span><span class="s1">))</span>
+        <span class="s0">return </span><span class="s1">functools.reduce(getattr</span><span class="s2">, </span><span class="s1">attrs</span><span class="s2">, </span><span class="s1">module)</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">module(self):</span>
+        <span class="s1">match = self.pattern.match(self.value)</span>
+        <span class="s0">return </span><span class="s1">match.group(</span><span class="s3">'module'</span><span class="s1">)</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">attr(self):</span>
+        <span class="s1">match = self.pattern.match(self.value)</span>
+        <span class="s0">return </span><span class="s1">match.group(</span><span class="s3">'attr'</span><span class="s1">)</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">extras(self):</span>
+        <span class="s1">match = self.pattern.match(self.value)</span>
+        <span class="s0">return </span><span class="s1">re.findall(</span><span class="s3">r'\w+'</span><span class="s2">, </span><span class="s1">match.group(</span><span class="s3">'extras'</span><span class="s1">) </span><span class="s0">or </span><span class="s3">''</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">_for(self</span><span class="s2">, </span><span class="s1">dist):</span>
+        <span class="s1">vars(self).update(dist=dist)</span>
+        <span class="s0">return </span><span class="s1">self</span>
+
+    <span class="s0">def </span><span class="s1">matches(self</span><span class="s2">, </span><span class="s1">**params):</span>
+        <span class="s4">&quot;&quot;&quot; 
+        EntryPoint matches the given parameters. 
+ 
+        &gt;&gt;&gt; ep = EntryPoint(group='foo', name='bar', value='bing:bong [extra1, extra2]') 
+        &gt;&gt;&gt; ep.matches(group='foo') 
+        True 
+        &gt;&gt;&gt; ep.matches(name='bar', value='bing:bong [extra1, extra2]') 
+        True 
+        &gt;&gt;&gt; ep.matches(group='foo', name='other') 
+        False 
+        &gt;&gt;&gt; ep.matches() 
+        True 
+        &gt;&gt;&gt; ep.matches(extras=['extra1', 'extra2']) 
+        True 
+        &gt;&gt;&gt; ep.matches(module='bing') 
+        True 
+        &gt;&gt;&gt; ep.matches(attr='bong') 
+        True 
+        &quot;&quot;&quot;</span>
+        <span class="s1">attrs = (getattr(self</span><span class="s2">, </span><span class="s1">param) </span><span class="s0">for </span><span class="s1">param </span><span class="s0">in </span><span class="s1">params)</span>
+        <span class="s0">return </span><span class="s1">all(map(operator.eq</span><span class="s2">, </span><span class="s1">params.values()</span><span class="s2">, </span><span class="s1">attrs))</span>
+
+    <span class="s0">def </span><span class="s1">_key(self):</span>
+        <span class="s0">return </span><span class="s1">self.name</span><span class="s2">, </span><span class="s1">self.value</span><span class="s2">, </span><span class="s1">self.group</span>
+
+    <span class="s0">def </span><span class="s1">__lt__(self</span><span class="s2">, </span><span class="s1">other):</span>
+        <span class="s0">return </span><span class="s1">self._key() &lt; other._key()</span>
+
+    <span class="s0">def </span><span class="s1">__eq__(self</span><span class="s2">, </span><span class="s1">other):</span>
+        <span class="s0">return </span><span class="s1">self._key() == other._key()</span>
+
+    <span class="s0">def </span><span class="s1">__setattr__(self</span><span class="s2">, </span><span class="s1">name</span><span class="s2">, </span><span class="s1">value):</span>
+        <span class="s0">raise </span><span class="s1">AttributeError(</span><span class="s3">&quot;EntryPoint objects are immutable.&quot;</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__repr__(self):</span>
+        <span class="s0">return </span><span class="s1">(</span>
+            <span class="s3">f'EntryPoint(name=</span><span class="s5">{</span><span class="s1">self.name</span><span class="s5">!r}</span><span class="s3">, value=</span><span class="s5">{</span><span class="s1">self.value</span><span class="s5">!r}</span><span class="s3">, '</span>
+            <span class="s3">f'group=</span><span class="s5">{</span><span class="s1">self.group</span><span class="s5">!r}</span><span class="s3">)'</span>
+        <span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__hash__(self):</span>
+        <span class="s0">return </span><span class="s1">hash(self._key())</span>
+
+
+<span class="s0">class </span><span class="s1">EntryPoints(tuple):</span>
+    <span class="s4">&quot;&quot;&quot; 
+    An immutable collection of selectable EntryPoint objects. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">__slots__ = ()</span>
+
+    <span class="s0">def </span><span class="s1">__getitem__(self</span><span class="s2">, </span><span class="s1">name):  </span><span class="s6"># -&gt; EntryPoint:</span>
+        <span class="s4">&quot;&quot;&quot; 
+        Get the EntryPoint in self matching name. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">try</span><span class="s1">:</span>
+            <span class="s0">return </span><span class="s1">next(iter(self.select(name=name)))</span>
+        <span class="s0">except </span><span class="s1">StopIteration:</span>
+            <span class="s0">raise </span><span class="s1">KeyError(name)</span>
+
+    <span class="s0">def </span><span class="s1">select(self</span><span class="s2">, </span><span class="s1">**params):</span>
+        <span class="s4">&quot;&quot;&quot; 
+        Select entry points from self that match the 
+        given parameters (typically group and/or name). 
+        &quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">EntryPoints(ep </span><span class="s0">for </span><span class="s1">ep </span><span class="s0">in </span><span class="s1">self </span><span class="s0">if </span><span class="s1">_py39compat.ep_matches(ep</span><span class="s2">, </span><span class="s1">**params))</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">names(self):</span>
+        <span class="s4">&quot;&quot;&quot; 
+        Return the set of all names of all entry points. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">{ep.name </span><span class="s0">for </span><span class="s1">ep </span><span class="s0">in </span><span class="s1">self}</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">groups(self):</span>
+        <span class="s4">&quot;&quot;&quot; 
+        Return the set of all groups of all entry points. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">{ep.group </span><span class="s0">for </span><span class="s1">ep </span><span class="s0">in </span><span class="s1">self}</span>
+
+    <span class="s1">@classmethod</span>
+    <span class="s0">def </span><span class="s1">_from_text_for(cls</span><span class="s2">, </span><span class="s1">text</span><span class="s2">, </span><span class="s1">dist):</span>
+        <span class="s0">return </span><span class="s1">cls(ep._for(dist) </span><span class="s0">for </span><span class="s1">ep </span><span class="s0">in </span><span class="s1">cls._from_text(text))</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s0">def </span><span class="s1">_from_text(text):</span>
+        <span class="s0">return </span><span class="s1">(</span>
+            <span class="s1">EntryPoint(name=item.value.name</span><span class="s2">, </span><span class="s1">value=item.value.value</span><span class="s2">, </span><span class="s1">group=item.name)</span>
+            <span class="s0">for </span><span class="s1">item </span><span class="s0">in </span><span class="s1">Sectioned.section_pairs(text </span><span class="s0">or </span><span class="s3">''</span><span class="s1">)</span>
+        <span class="s1">)</span>
+
+
+<span class="s0">class </span><span class="s1">PackagePath(pathlib.PurePosixPath):</span>
+    <span class="s4">&quot;&quot;&quot;A reference to a path in a package&quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">read_text(self</span><span class="s2">, </span><span class="s1">encoding=</span><span class="s3">'utf-8'</span><span class="s1">):</span>
+        <span class="s0">with </span><span class="s1">self.locate().open(encoding=encoding) </span><span class="s0">as </span><span class="s1">stream:</span>
+            <span class="s0">return </span><span class="s1">stream.read()</span>
+
+    <span class="s0">def </span><span class="s1">read_binary(self):</span>
+        <span class="s0">with </span><span class="s1">self.locate().open(</span><span class="s3">'rb'</span><span class="s1">) </span><span class="s0">as </span><span class="s1">stream:</span>
+            <span class="s0">return </span><span class="s1">stream.read()</span>
+
+    <span class="s0">def </span><span class="s1">locate(self):</span>
+        <span class="s4">&quot;&quot;&quot;Return a path-like object for this path&quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">self.dist.locate_file(self)</span>
+
+
+<span class="s0">class </span><span class="s1">FileHash:</span>
+    <span class="s0">def </span><span class="s1">__init__(self</span><span class="s2">, </span><span class="s1">spec):</span>
+        <span class="s1">self.mode</span><span class="s2">, </span><span class="s1">_</span><span class="s2">, </span><span class="s1">self.value = spec.partition(</span><span class="s3">'='</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__repr__(self):</span>
+        <span class="s0">return </span><span class="s3">f'&lt;FileHash mode: </span><span class="s5">{</span><span class="s1">self.mode</span><span class="s5">} </span><span class="s3">value: </span><span class="s5">{</span><span class="s1">self.value</span><span class="s5">}</span><span class="s3">&gt;'</span>
+
+
+<span class="s0">class </span><span class="s1">Distribution(metaclass=abc.ABCMeta):</span>
+    <span class="s4">&quot;&quot;&quot;A Python distribution package.&quot;&quot;&quot;</span>
+
+    <span class="s1">@abc.abstractmethod</span>
+    <span class="s0">def </span><span class="s1">read_text(self</span><span class="s2">, </span><span class="s1">filename):</span>
+        <span class="s4">&quot;&quot;&quot;Attempt to load metadata file given by the name. 
+ 
+        :param filename: The name of the file in the distribution info. 
+        :return: The text if found, otherwise None. 
+        &quot;&quot;&quot;</span>
+
+    <span class="s1">@abc.abstractmethod</span>
+    <span class="s0">def </span><span class="s1">locate_file(self</span><span class="s2">, </span><span class="s1">path):</span>
+        <span class="s4">&quot;&quot;&quot; 
+        Given a path to a file in this distribution, return a path 
+        to it. 
+        &quot;&quot;&quot;</span>
+
+    <span class="s1">@classmethod</span>
+    <span class="s0">def </span><span class="s1">from_name(cls</span><span class="s2">, </span><span class="s1">name: str):</span>
+        <span class="s4">&quot;&quot;&quot;Return the Distribution for the given package name. 
+ 
+        :param name: The name of the distribution package to search for. 
+        :return: The Distribution instance (or subclass thereof) for the named 
+            package, if found. 
+        :raises PackageNotFoundError: When the named package's distribution 
+            metadata cannot be found. 
+        :raises ValueError: When an invalid value is supplied for name. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">if not </span><span class="s1">name:</span>
+            <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;A distribution name is required.&quot;</span><span class="s1">)</span>
+        <span class="s0">try</span><span class="s1">:</span>
+            <span class="s0">return </span><span class="s1">next(cls.discover(name=name))</span>
+        <span class="s0">except </span><span class="s1">StopIteration:</span>
+            <span class="s0">raise </span><span class="s1">PackageNotFoundError(name)</span>
+
+    <span class="s1">@classmethod</span>
+    <span class="s0">def </span><span class="s1">discover(cls</span><span class="s2">, </span><span class="s1">**kwargs):</span>
+        <span class="s4">&quot;&quot;&quot;Return an iterable of Distribution objects for all packages. 
+ 
+        Pass a ``context`` or pass keyword arguments for constructing 
+        a context. 
+ 
+        :context: A ``DistributionFinder.Context`` object. 
+        :return: Iterable of Distribution objects for all packages. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">context = kwargs.pop(</span><span class="s3">'context'</span><span class="s2">, </span><span class="s0">None</span><span class="s1">)</span>
+        <span class="s0">if </span><span class="s1">context </span><span class="s0">and </span><span class="s1">kwargs:</span>
+            <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;cannot accept context and kwargs&quot;</span><span class="s1">)</span>
+        <span class="s1">context = context </span><span class="s0">or </span><span class="s1">DistributionFinder.Context(**kwargs)</span>
+        <span class="s0">return </span><span class="s1">itertools.chain.from_iterable(</span>
+            <span class="s1">resolver(context) </span><span class="s0">for </span><span class="s1">resolver </span><span class="s0">in </span><span class="s1">cls._discover_resolvers()</span>
+        <span class="s1">)</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s0">def </span><span class="s1">at(path):</span>
+        <span class="s4">&quot;&quot;&quot;Return a Distribution for the indicated metadata path 
+ 
+        :param path: a string or path-like object 
+        :return: a concrete Distribution instance for the path 
+        &quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">PathDistribution(pathlib.Path(path))</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s0">def </span><span class="s1">_discover_resolvers():</span>
+        <span class="s4">&quot;&quot;&quot;Search the meta_path for resolvers.&quot;&quot;&quot;</span>
+        <span class="s1">declared = (</span>
+            <span class="s1">getattr(finder</span><span class="s2">, </span><span class="s3">'find_distributions'</span><span class="s2">, </span><span class="s0">None</span><span class="s1">) </span><span class="s0">for </span><span class="s1">finder </span><span class="s0">in </span><span class="s1">sys.meta_path</span>
+        <span class="s1">)</span>
+        <span class="s0">return </span><span class="s1">filter(</span><span class="s0">None</span><span class="s2">, </span><span class="s1">declared)</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">metadata(self) -&gt; _meta.PackageMetadata:</span>
+        <span class="s4">&quot;&quot;&quot;Return the parsed metadata for this Distribution. 
+ 
+        The returned object will have keys that name the various bits of 
+        metadata.  See PEP 566 for details. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">text = (</span>
+            <span class="s1">self.read_text(</span><span class="s3">'METADATA'</span><span class="s1">)</span>
+            <span class="s0">or </span><span class="s1">self.read_text(</span><span class="s3">'PKG-INFO'</span><span class="s1">)</span>
+            <span class="s6"># This last clause is here to support old egg-info files.  Its</span>
+            <span class="s6"># effect is to just end up using the PathDistribution's self._path</span>
+            <span class="s6"># (which points to the egg-info file) attribute unchanged.</span>
+            <span class="s0">or </span><span class="s1">self.read_text(</span><span class="s3">''</span><span class="s1">)</span>
+        <span class="s1">)</span>
+        <span class="s0">return </span><span class="s1">_adapters.Message(email.message_from_string(text))</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">name(self):</span>
+        <span class="s4">&quot;&quot;&quot;Return the 'Name' metadata for the distribution package.&quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">self.metadata[</span><span class="s3">'Name'</span><span class="s1">]</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">_normalized_name(self):</span>
+        <span class="s4">&quot;&quot;&quot;Return a normalized version of the name.&quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">Prepared.normalize(self.name)</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">version(self):</span>
+        <span class="s4">&quot;&quot;&quot;Return the 'Version' metadata for the distribution package.&quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">self.metadata[</span><span class="s3">'Version'</span><span class="s1">]</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">entry_points(self):</span>
+        <span class="s0">return </span><span class="s1">EntryPoints._from_text_for(self.read_text(</span><span class="s3">'entry_points.txt'</span><span class="s1">)</span><span class="s2">, </span><span class="s1">self)</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">files(self):</span>
+        <span class="s4">&quot;&quot;&quot;Files in this distribution. 
+ 
+        :return: List of PackagePath for this distribution or None 
+ 
+        Result is `None` if the metadata file that enumerates files 
+        (i.e. RECORD for dist-info or SOURCES.txt for egg-info) is 
+        missing. 
+        Result may be empty if the metadata exists but is empty. 
+        &quot;&quot;&quot;</span>
+
+        <span class="s0">def </span><span class="s1">make_file(name</span><span class="s2">, </span><span class="s1">hash=</span><span class="s0">None</span><span class="s2">, </span><span class="s1">size_str=</span><span class="s0">None</span><span class="s1">):</span>
+            <span class="s1">result = PackagePath(name)</span>
+            <span class="s1">result.hash = FileHash(hash) </span><span class="s0">if </span><span class="s1">hash </span><span class="s0">else None</span>
+            <span class="s1">result.size = int(size_str) </span><span class="s0">if </span><span class="s1">size_str </span><span class="s0">else None</span>
+            <span class="s1">result.dist = self</span>
+            <span class="s0">return </span><span class="s1">result</span>
+
+        <span class="s1">@pass_none</span>
+        <span class="s0">def </span><span class="s1">make_files(lines):</span>
+            <span class="s0">return </span><span class="s1">list(starmap(make_file</span><span class="s2">, </span><span class="s1">csv.reader(lines)))</span>
+
+        <span class="s0">return </span><span class="s1">make_files(self._read_files_distinfo() </span><span class="s0">or </span><span class="s1">self._read_files_egginfo())</span>
+
+    <span class="s0">def </span><span class="s1">_read_files_distinfo(self):</span>
+        <span class="s4">&quot;&quot;&quot; 
+        Read the lines of RECORD 
+        &quot;&quot;&quot;</span>
+        <span class="s1">text = self.read_text(</span><span class="s3">'RECORD'</span><span class="s1">)</span>
+        <span class="s0">return </span><span class="s1">text </span><span class="s0">and </span><span class="s1">text.splitlines()</span>
+
+    <span class="s0">def </span><span class="s1">_read_files_egginfo(self):</span>
+        <span class="s4">&quot;&quot;&quot; 
+        SOURCES.txt might contain literal commas, so wrap each line 
+        in quotes. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">text = self.read_text(</span><span class="s3">'SOURCES.txt'</span><span class="s1">)</span>
+        <span class="s0">return </span><span class="s1">text </span><span class="s0">and </span><span class="s1">map(</span><span class="s3">'&quot;{}&quot;'</span><span class="s1">.format</span><span class="s2">, </span><span class="s1">text.splitlines())</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">requires(self):</span>
+        <span class="s4">&quot;&quot;&quot;Generated requirements specified for this Distribution&quot;&quot;&quot;</span>
+        <span class="s1">reqs = self._read_dist_info_reqs() </span><span class="s0">or </span><span class="s1">self._read_egg_info_reqs()</span>
+        <span class="s0">return </span><span class="s1">reqs </span><span class="s0">and </span><span class="s1">list(reqs)</span>
+
+    <span class="s0">def </span><span class="s1">_read_dist_info_reqs(self):</span>
+        <span class="s0">return </span><span class="s1">self.metadata.get_all(</span><span class="s3">'Requires-Dist'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">_read_egg_info_reqs(self):</span>
+        <span class="s1">source = self.read_text(</span><span class="s3">'requires.txt'</span><span class="s1">)</span>
+        <span class="s0">return </span><span class="s1">pass_none(self._deps_from_requires_text)(source)</span>
+
+    <span class="s1">@classmethod</span>
+    <span class="s0">def </span><span class="s1">_deps_from_requires_text(cls</span><span class="s2">, </span><span class="s1">source):</span>
+        <span class="s0">return </span><span class="s1">cls._convert_egg_info_reqs_to_simple_reqs(Sectioned.read(source))</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s0">def </span><span class="s1">_convert_egg_info_reqs_to_simple_reqs(sections):</span>
+        <span class="s4">&quot;&quot;&quot; 
+        Historically, setuptools would solicit and store 'extra' 
+        requirements, including those with environment markers, 
+        in separate sections. More modern tools expect each 
+        dependency to be defined separately, with any relevant 
+        extras and environment markers attached directly to that 
+        requirement. This method converts the former to the 
+        latter. See _test_deps_from_requires_text for an example. 
+        &quot;&quot;&quot;</span>
+
+        <span class="s0">def </span><span class="s1">make_condition(name):</span>
+            <span class="s0">return </span><span class="s1">name </span><span class="s0">and </span><span class="s3">f'extra == &quot;</span><span class="s5">{</span><span class="s1">name</span><span class="s5">}</span><span class="s3">&quot;'</span>
+
+        <span class="s0">def </span><span class="s1">quoted_marker(section):</span>
+            <span class="s1">section = section </span><span class="s0">or </span><span class="s3">''</span>
+            <span class="s1">extra</span><span class="s2">, </span><span class="s1">sep</span><span class="s2">, </span><span class="s1">markers = section.partition(</span><span class="s3">':'</span><span class="s1">)</span>
+            <span class="s0">if </span><span class="s1">extra </span><span class="s0">and </span><span class="s1">markers:</span>
+                <span class="s1">markers = </span><span class="s3">f'(</span><span class="s5">{</span><span class="s1">markers</span><span class="s5">}</span><span class="s3">)'</span>
+            <span class="s1">conditions = list(filter(</span><span class="s0">None</span><span class="s2">, </span><span class="s1">[markers</span><span class="s2">, </span><span class="s1">make_condition(extra)]))</span>
+            <span class="s0">return </span><span class="s3">'; ' </span><span class="s1">+ </span><span class="s3">' and '</span><span class="s1">.join(conditions) </span><span class="s0">if </span><span class="s1">conditions </span><span class="s0">else </span><span class="s3">''</span>
+
+        <span class="s0">def </span><span class="s1">url_req_space(req):</span>
+            <span class="s4">&quot;&quot;&quot; 
+            PEP 508 requires a space between the url_spec and the quoted_marker. 
+            Ref python/importlib_metadata#357. 
+            &quot;&quot;&quot;</span>
+            <span class="s6"># '@' is uniquely indicative of a url_req.</span>
+            <span class="s0">return </span><span class="s3">' ' </span><span class="s1">* (</span><span class="s3">'@' </span><span class="s0">in </span><span class="s1">req)</span>
+
+        <span class="s0">for </span><span class="s1">section </span><span class="s0">in </span><span class="s1">sections:</span>
+            <span class="s1">space = url_req_space(section.value)</span>
+            <span class="s0">yield </span><span class="s1">section.value + space + quoted_marker(section.name)</span>
+
+
+<span class="s0">class </span><span class="s1">DistributionFinder(MetaPathFinder):</span>
+    <span class="s4">&quot;&quot;&quot; 
+    A MetaPathFinder capable of discovering installed distributions. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0">class </span><span class="s1">Context:</span>
+        <span class="s4">&quot;&quot;&quot; 
+        Keyword arguments presented by the caller to 
+        ``distributions()`` or ``Distribution.discover()`` 
+        to narrow the scope of a search for distributions 
+        in all DistributionFinders. 
+ 
+        Each DistributionFinder may expect any parameters 
+        and should attempt to honor the canonical 
+        parameters defined below when appropriate. 
+        &quot;&quot;&quot;</span>
+
+        <span class="s1">name = </span><span class="s0">None</span>
+        <span class="s3">&quot;&quot;&quot; 
+        Specific name for which a distribution finder should match. 
+        A name of ``None`` matches all distributions. 
+        &quot;&quot;&quot;</span>
+
+        <span class="s0">def </span><span class="s1">__init__(self</span><span class="s2">, </span><span class="s1">**kwargs):</span>
+            <span class="s1">vars(self).update(kwargs)</span>
+
+        <span class="s1">@property</span>
+        <span class="s0">def </span><span class="s1">path(self):</span>
+            <span class="s4">&quot;&quot;&quot; 
+            The sequence of directory path that a distribution finder 
+            should search. 
+ 
+            Typically refers to Python installed package paths such as 
+            &quot;site-packages&quot; directories and defaults to ``sys.path``. 
+            &quot;&quot;&quot;</span>
+            <span class="s0">return </span><span class="s1">vars(self).get(</span><span class="s3">'path'</span><span class="s2">, </span><span class="s1">sys.path)</span>
+
+    <span class="s1">@abc.abstractmethod</span>
+    <span class="s0">def </span><span class="s1">find_distributions(self</span><span class="s2">, </span><span class="s1">context=Context()):</span>
+        <span class="s4">&quot;&quot;&quot; 
+        Find distributions. 
+ 
+        Return an iterable of all Distribution instances capable of 
+        loading the metadata for packages matching the ``context``, 
+        a DistributionFinder.Context instance. 
+        &quot;&quot;&quot;</span>
+
+
+<span class="s0">class </span><span class="s1">FastPath:</span>
+    <span class="s4">&quot;&quot;&quot; 
+    Micro-optimized class for searching a path for 
+    children. 
+ 
+    &gt;&gt;&gt; FastPath('').children() 
+    ['...'] 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">@functools.lru_cache()  </span><span class="s6"># type: ignore</span>
+    <span class="s0">def </span><span class="s1">__new__(cls</span><span class="s2">, </span><span class="s1">root):</span>
+        <span class="s0">return </span><span class="s1">super().__new__(cls)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self</span><span class="s2">, </span><span class="s1">root):</span>
+        <span class="s1">self.root = root</span>
+
+    <span class="s0">def </span><span class="s1">joinpath(self</span><span class="s2">, </span><span class="s1">child):</span>
+        <span class="s0">return </span><span class="s1">pathlib.Path(self.root</span><span class="s2">, </span><span class="s1">child)</span>
+
+    <span class="s0">def </span><span class="s1">children(self):</span>
+        <span class="s0">with </span><span class="s1">suppress(Exception):</span>
+            <span class="s0">return </span><span class="s1">os.listdir(self.root </span><span class="s0">or </span><span class="s3">'.'</span><span class="s1">)</span>
+        <span class="s0">with </span><span class="s1">suppress(Exception):</span>
+            <span class="s0">return </span><span class="s1">self.zip_children()</span>
+        <span class="s0">return </span><span class="s1">[]</span>
+
+    <span class="s0">def </span><span class="s1">zip_children(self):</span>
+        <span class="s1">zip_path = zipp.Path(self.root)</span>
+        <span class="s1">names = zip_path.root.namelist()</span>
+        <span class="s1">self.joinpath = zip_path.joinpath</span>
+
+        <span class="s0">return </span><span class="s1">dict.fromkeys(child.split(posixpath.sep</span><span class="s2">, </span><span class="s7">1</span><span class="s1">)[</span><span class="s7">0</span><span class="s1">] </span><span class="s0">for </span><span class="s1">child </span><span class="s0">in </span><span class="s1">names)</span>
+
+    <span class="s0">def </span><span class="s1">search(self</span><span class="s2">, </span><span class="s1">name):</span>
+        <span class="s0">return </span><span class="s1">self.lookup(self.mtime).search(name)</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">mtime(self):</span>
+        <span class="s0">with </span><span class="s1">suppress(OSError):</span>
+            <span class="s0">return </span><span class="s1">os.stat(self.root).st_mtime</span>
+        <span class="s1">self.lookup.cache_clear()</span>
+
+    <span class="s1">@method_cache</span>
+    <span class="s0">def </span><span class="s1">lookup(self</span><span class="s2">, </span><span class="s1">mtime):</span>
+        <span class="s0">return </span><span class="s1">Lookup(self)</span>
+
+
+<span class="s0">class </span><span class="s1">Lookup:</span>
+    <span class="s0">def </span><span class="s1">__init__(self</span><span class="s2">, </span><span class="s1">path: FastPath):</span>
+        <span class="s1">base = os.path.basename(path.root).lower()</span>
+        <span class="s1">base_is_egg = base.endswith(</span><span class="s3">&quot;.egg&quot;</span><span class="s1">)</span>
+        <span class="s1">self.infos = FreezableDefaultDict(list)</span>
+        <span class="s1">self.eggs = FreezableDefaultDict(list)</span>
+
+        <span class="s0">for </span><span class="s1">child </span><span class="s0">in </span><span class="s1">path.children():</span>
+            <span class="s1">low = child.lower()</span>
+            <span class="s0">if </span><span class="s1">low.endswith((</span><span class="s3">&quot;.dist-info&quot;</span><span class="s2">, </span><span class="s3">&quot;.egg-info&quot;</span><span class="s1">)):</span>
+                <span class="s6"># rpartition is faster than splitext and suitable for this purpose.</span>
+                <span class="s1">name = low.rpartition(</span><span class="s3">&quot;.&quot;</span><span class="s1">)[</span><span class="s7">0</span><span class="s1">].partition(</span><span class="s3">&quot;-&quot;</span><span class="s1">)[</span><span class="s7">0</span><span class="s1">]</span>
+                <span class="s1">normalized = Prepared.normalize(name)</span>
+                <span class="s1">self.infos[normalized].append(path.joinpath(child))</span>
+            <span class="s0">elif </span><span class="s1">base_is_egg </span><span class="s0">and </span><span class="s1">low == </span><span class="s3">&quot;egg-info&quot;</span><span class="s1">:</span>
+                <span class="s1">name = base.rpartition(</span><span class="s3">&quot;.&quot;</span><span class="s1">)[</span><span class="s7">0</span><span class="s1">].partition(</span><span class="s3">&quot;-&quot;</span><span class="s1">)[</span><span class="s7">0</span><span class="s1">]</span>
+                <span class="s1">legacy_normalized = Prepared.legacy_normalize(name)</span>
+                <span class="s1">self.eggs[legacy_normalized].append(path.joinpath(child))</span>
+
+        <span class="s1">self.infos.freeze()</span>
+        <span class="s1">self.eggs.freeze()</span>
+
+    <span class="s0">def </span><span class="s1">search(self</span><span class="s2">, </span><span class="s1">prepared):</span>
+        <span class="s1">infos = (</span>
+            <span class="s1">self.infos[prepared.normalized]</span>
+            <span class="s0">if </span><span class="s1">prepared</span>
+            <span class="s0">else </span><span class="s1">itertools.chain.from_iterable(self.infos.values())</span>
+        <span class="s1">)</span>
+        <span class="s1">eggs = (</span>
+            <span class="s1">self.eggs[prepared.legacy_normalized]</span>
+            <span class="s0">if </span><span class="s1">prepared</span>
+            <span class="s0">else </span><span class="s1">itertools.chain.from_iterable(self.eggs.values())</span>
+        <span class="s1">)</span>
+        <span class="s0">return </span><span class="s1">itertools.chain(infos</span><span class="s2">, </span><span class="s1">eggs)</span>
+
+
+<span class="s0">class </span><span class="s1">Prepared:</span>
+    <span class="s4">&quot;&quot;&quot; 
+    A prepared search for metadata on a possibly-named package. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">normalized = </span><span class="s0">None</span>
+    <span class="s1">legacy_normalized = </span><span class="s0">None</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self</span><span class="s2">, </span><span class="s1">name):</span>
+        <span class="s1">self.name = name</span>
+        <span class="s0">if </span><span class="s1">name </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s0">return</span>
+        <span class="s1">self.normalized = self.normalize(name)</span>
+        <span class="s1">self.legacy_normalized = self.legacy_normalize(name)</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s0">def </span><span class="s1">normalize(name):</span>
+        <span class="s4">&quot;&quot;&quot; 
+        PEP 503 normalization plus dashes as underscores. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">re.sub(</span><span class="s3">r&quot;[-_.]+&quot;</span><span class="s2">, </span><span class="s3">&quot;-&quot;</span><span class="s2">, </span><span class="s1">name).lower().replace(</span><span class="s3">'-'</span><span class="s2">, </span><span class="s3">'_'</span><span class="s1">)</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s0">def </span><span class="s1">legacy_normalize(name):</span>
+        <span class="s4">&quot;&quot;&quot; 
+        Normalize the package name as found in the convention in 
+        older packaging tools versions and specs. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">name.lower().replace(</span><span class="s3">'-'</span><span class="s2">, </span><span class="s3">'_'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__bool__(self):</span>
+        <span class="s0">return </span><span class="s1">bool(self.name)</span>
+
+
+<span class="s1">@install</span>
+<span class="s0">class </span><span class="s1">MetadataPathFinder(NullFinder</span><span class="s2">, </span><span class="s1">DistributionFinder):</span>
+    <span class="s4">&quot;&quot;&quot;A degenerate finder for distribution packages on the file system. 
+ 
+    This finder supplies only a find_distributions() method for versions 
+    of Python that do not have a PathFinder find_distributions(). 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">find_distributions(self</span><span class="s2">, </span><span class="s1">context=DistributionFinder.Context()):</span>
+        <span class="s4">&quot;&quot;&quot; 
+        Find distributions. 
+ 
+        Return an iterable of all Distribution instances capable of 
+        loading the metadata for packages matching ``context.name`` 
+        (or all names if ``None`` indicated) along the paths in the list 
+        of directories ``context.path``. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">found = self._search_paths(context.name</span><span class="s2">, </span><span class="s1">context.path)</span>
+        <span class="s0">return </span><span class="s1">map(PathDistribution</span><span class="s2">, </span><span class="s1">found)</span>
+
+    <span class="s1">@classmethod</span>
+    <span class="s0">def </span><span class="s1">_search_paths(cls</span><span class="s2">, </span><span class="s1">name</span><span class="s2">, </span><span class="s1">paths):</span>
+        <span class="s4">&quot;&quot;&quot;Find metadata directories in paths heuristically.&quot;&quot;&quot;</span>
+        <span class="s1">prepared = Prepared(name)</span>
+        <span class="s0">return </span><span class="s1">itertools.chain.from_iterable(</span>
+            <span class="s1">path.search(prepared) </span><span class="s0">for </span><span class="s1">path </span><span class="s0">in </span><span class="s1">map(FastPath</span><span class="s2">, </span><span class="s1">paths)</span>
+        <span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">invalidate_caches(cls):</span>
+        <span class="s1">FastPath.__new__.cache_clear()</span>
+
+
+<span class="s0">class </span><span class="s1">PathDistribution(Distribution):</span>
+    <span class="s0">def </span><span class="s1">__init__(self</span><span class="s2">, </span><span class="s1">path: SimplePath):</span>
+        <span class="s4">&quot;&quot;&quot;Construct a distribution. 
+ 
+        :param path: SimplePath indicating the metadata directory. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self._path = path</span>
+
+    <span class="s0">def </span><span class="s1">read_text(self</span><span class="s2">, </span><span class="s1">filename):</span>
+        <span class="s0">with </span><span class="s1">suppress(</span>
+            <span class="s1">FileNotFoundError</span><span class="s2">,</span>
+            <span class="s1">IsADirectoryError</span><span class="s2">,</span>
+            <span class="s1">KeyError</span><span class="s2">,</span>
+            <span class="s1">NotADirectoryError</span><span class="s2">,</span>
+            <span class="s1">PermissionError</span><span class="s2">,</span>
+        <span class="s1">):</span>
+            <span class="s0">return </span><span class="s1">self._path.joinpath(filename).read_text(encoding=</span><span class="s3">'utf-8'</span><span class="s1">)</span>
+
+    <span class="s1">read_text.__doc__ = Distribution.read_text.__doc__</span>
+
+    <span class="s0">def </span><span class="s1">locate_file(self</span><span class="s2">, </span><span class="s1">path):</span>
+        <span class="s0">return </span><span class="s1">self._path.parent / path</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">_normalized_name(self):</span>
+        <span class="s4">&quot;&quot;&quot; 
+        Performance optimization: where possible, resolve the 
+        normalized name from the file system path. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">stem = os.path.basename(str(self._path))</span>
+        <span class="s0">return </span><span class="s1">(</span>
+            <span class="s1">pass_none(Prepared.normalize)(self._name_from_stem(stem))</span>
+            <span class="s0">or </span><span class="s1">super()._normalized_name</span>
+        <span class="s1">)</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s0">def </span><span class="s1">_name_from_stem(stem):</span>
+        <span class="s4">&quot;&quot;&quot; 
+        &gt;&gt;&gt; PathDistribution._name_from_stem('foo-3.0.egg-info') 
+        'foo' 
+        &gt;&gt;&gt; PathDistribution._name_from_stem('CherryPy-3.0.dist-info') 
+        'CherryPy' 
+        &gt;&gt;&gt; PathDistribution._name_from_stem('face.egg-info') 
+        'face' 
+        &gt;&gt;&gt; PathDistribution._name_from_stem('foo.bar') 
+        &quot;&quot;&quot;</span>
+        <span class="s1">filename</span><span class="s2">, </span><span class="s1">ext = os.path.splitext(stem)</span>
+        <span class="s0">if </span><span class="s1">ext </span><span class="s0">not in </span><span class="s1">(</span><span class="s3">'.dist-info'</span><span class="s2">, </span><span class="s3">'.egg-info'</span><span class="s1">):</span>
+            <span class="s0">return</span>
+        <span class="s1">name</span><span class="s2">, </span><span class="s1">sep</span><span class="s2">, </span><span class="s1">rest = filename.partition(</span><span class="s3">'-'</span><span class="s1">)</span>
+        <span class="s0">return </span><span class="s1">name</span>
+
+
+<span class="s0">def </span><span class="s1">distribution(distribution_name):</span>
+    <span class="s4">&quot;&quot;&quot;Get the ``Distribution`` instance for the named package. 
+ 
+    :param distribution_name: The name of the distribution package as a string. 
+    :return: A ``Distribution`` instance (or subclass thereof). 
+    &quot;&quot;&quot;</span>
+    <span class="s0">return </span><span class="s1">Distribution.from_name(distribution_name)</span>
+
+
+<span class="s0">def </span><span class="s1">distributions(**kwargs):</span>
+    <span class="s4">&quot;&quot;&quot;Get all ``Distribution`` instances in the current environment. 
+ 
+    :return: An iterable of ``Distribution`` instances. 
+    &quot;&quot;&quot;</span>
+    <span class="s0">return </span><span class="s1">Distribution.discover(**kwargs)</span>
+
+
+<span class="s0">def </span><span class="s1">metadata(distribution_name) -&gt; _meta.PackageMetadata:</span>
+    <span class="s4">&quot;&quot;&quot;Get the metadata for the named package. 
+ 
+    :param distribution_name: The name of the distribution package to query. 
+    :return: A PackageMetadata containing the parsed metadata. 
+    &quot;&quot;&quot;</span>
+    <span class="s0">return </span><span class="s1">Distribution.from_name(distribution_name).metadata</span>
+
+
+<span class="s0">def </span><span class="s1">version(distribution_name):</span>
+    <span class="s4">&quot;&quot;&quot;Get the version string for the named package. 
+ 
+    :param distribution_name: The name of the distribution package to query. 
+    :return: The version string for the package as defined in the package's 
+        &quot;Version&quot; metadata key. 
+    &quot;&quot;&quot;</span>
+    <span class="s0">return </span><span class="s1">distribution(distribution_name).version</span>
+
+
+<span class="s1">_unique = functools.partial(</span>
+    <span class="s1">unique_everseen</span><span class="s2">,</span>
+    <span class="s1">key=_py39compat.normalized_name</span><span class="s2">,</span>
+<span class="s1">)</span>
+<span class="s3">&quot;&quot;&quot; 
+Wrapper for ``distributions`` to return unique distributions by name. 
+&quot;&quot;&quot;</span>
+
+
+<span class="s0">def </span><span class="s1">entry_points(**params) -&gt; EntryPoints:</span>
+    <span class="s4">&quot;&quot;&quot;Return EntryPoint objects for all installed packages. 
+ 
+    Pass selection parameters (group or name) to filter the 
+    result to entry points matching those properties (see 
+    EntryPoints.select()). 
+ 
+    :return: EntryPoints for all installed packages. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">eps = itertools.chain.from_iterable(</span>
+        <span class="s1">dist.entry_points </span><span class="s0">for </span><span class="s1">dist </span><span class="s0">in </span><span class="s1">_unique(distributions())</span>
+    <span class="s1">)</span>
+    <span class="s0">return </span><span class="s1">EntryPoints(eps).select(**params)</span>
+
+
+<span class="s0">def </span><span class="s1">files(distribution_name):</span>
+    <span class="s4">&quot;&quot;&quot;Return a list of files for the named package. 
+ 
+    :param distribution_name: The name of the distribution package to query. 
+    :return: List of files composing the distribution. 
+    &quot;&quot;&quot;</span>
+    <span class="s0">return </span><span class="s1">distribution(distribution_name).files</span>
+
+
+<span class="s0">def </span><span class="s1">requires(distribution_name):</span>
+    <span class="s4">&quot;&quot;&quot; 
+    Return a list of requirements for the named package. 
+ 
+    :return: An iterator of requirements, suitable for 
+        packaging.requirement.Requirement. 
+    &quot;&quot;&quot;</span>
+    <span class="s0">return </span><span class="s1">distribution(distribution_name).requires</span>
+
+
+<span class="s0">def </span><span class="s1">packages_distributions() -&gt; Mapping[str</span><span class="s2">, </span><span class="s1">List[str]]:</span>
+    <span class="s4">&quot;&quot;&quot; 
+    Return a mapping of top-level packages to their 
+    distributions. 
+ 
+    &gt;&gt;&gt; import collections.abc 
+    &gt;&gt;&gt; pkgs = packages_distributions() 
+    &gt;&gt;&gt; all(isinstance(dist, collections.abc.Sequence) for dist in pkgs.values()) 
+    True 
+    &quot;&quot;&quot;</span>
+    <span class="s1">pkg_to_dist = collections.defaultdict(list)</span>
+    <span class="s0">for </span><span class="s1">dist </span><span class="s0">in </span><span class="s1">distributions():</span>
+        <span class="s0">for </span><span class="s1">pkg </span><span class="s0">in </span><span class="s1">_top_level_declared(dist) </span><span class="s0">or </span><span class="s1">_top_level_inferred(dist):</span>
+            <span class="s1">pkg_to_dist[pkg].append(dist.metadata[</span><span class="s3">'Name'</span><span class="s1">])</span>
+    <span class="s0">return </span><span class="s1">dict(pkg_to_dist)</span>
+
+
+<span class="s0">def </span><span class="s1">_top_level_declared(dist):</span>
+    <span class="s0">return </span><span class="s1">(dist.read_text(</span><span class="s3">'top_level.txt'</span><span class="s1">) </span><span class="s0">or </span><span class="s3">''</span><span class="s1">).split()</span>
+
+
+<span class="s0">def </span><span class="s1">_top_level_inferred(dist):</span>
+    <span class="s0">return </span><span class="s1">{</span>
+        <span class="s1">f.parts[</span><span class="s7">0</span><span class="s1">] </span><span class="s0">if </span><span class="s1">len(f.parts) &gt; </span><span class="s7">1 </span><span class="s0">else </span><span class="s1">f.with_suffix(</span><span class="s3">''</span><span class="s1">).name</span>
+        <span class="s0">for </span><span class="s1">f </span><span class="s0">in </span><span class="s1">always_iterable(dist.files)</span>
+        <span class="s0">if </span><span class="s1">f.suffix == </span><span class="s3">&quot;.py&quot;</span>
+    <span class="s1">}</span>
+</pre>
+</body>
+</html>
